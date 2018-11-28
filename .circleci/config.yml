@@ -1,0 +1,85 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+version: 2
+
+executors:
+  goexecutor:
+    working_directory: /go/src/github.com/signalfx/lambda-go
+    docker:
+      - image: golang:1.10-alpine
+#        environment:
+#          AGENT_BIN: /go/src/github.com/signalfx/signalfx-agent/signalfx-agent
+
+commands:
+  goexecutor_setup:
+    steps:
+      - run: apk add --no-cache curl make git bash coreutils
+  save_test_results:
+    description: Collect and archive test results from `dir`.
+    parameters:
+      dir:
+        type: string
+        default: "~/testresults"
+    steps:
+      - store_test_results:
+          path: << parameters.dir >>
+      - store_artifacts:
+          path: << parameters.dir >>
+
+jobs:
+  lint:
+    executor: goexecutor
+    steps:
+      - checkout
+      - goexecutor_setup
+      - run: |
+          go get -u golang.org/x/lint/golint
+          make lint
+  vet:
+    executor: goexecutor
+    steps:
+      - checkout
+      - goexecutor_setup
+      - run: |
+          make vet
+  gofmt:
+    executor: goexecutor
+    steps:
+      - checkout
+      - goexecutor_setup
+      - run: |
+          make gofmt
+          git diff --exit-code || (echo 'go files need to be reformatted. Run `make gofmt` in the dev image and commit the changes.' && exit 1)
+  gotests:
+    executor: goexecutor
+    steps:
+      - checkout
+      - goexecutor_setup
+      - run: |
+          mkdir ~/testresults
+          go get github.com/tebeka/go2xunit
+          bash -eo pipefail -c "make templates >/dev/null && SIGNALFX_AUTH_TOKEN=test go test -v ./... | tee /dev/stderr | go2xunit" > ~/testresults/unit.xml
+      - save_test_results
+
+#  build:
+#    docker:
+#      # specify the version
+#      - image: circleci/golang:1.9
+#
+#      # Specify service dependencies here if necessary
+#      # CircleCI maintains a library of pre-built images
+#      # documented at https://circleci.com/docs/2.0/circleci-images/
+#      # - image: circleci/postgres:9.4
+#
+#    #### TEMPLATE_NOTE: go expects specific checkout path representing url
+#    #### expecting it in the form of
+#    ####   /go/src/github.com/circleci/go-tool
+#    ####   /go/src/bitbucket.org/circleci/go-tool
+#    working_directory: /go/src/github.com/signalfx/lambda-go
+#    steps:
+#      - checkout
+#
+#      # specify any bash command here prefixed with `run: `
+#      - run: go get -v -t -d ./...
+#      - run: SIGNALFX_AUTH_TOKEN=test go test -v
