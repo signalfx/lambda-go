@@ -45,9 +45,6 @@ func init() {
 }
 
 var sendDatapoints = func(ctx context.Context, dps []*datapoint.Datapoint) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	now := time.Now()
 	for _, dp := range dps {
 		if dp.Timestamp.IsZero() {

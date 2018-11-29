@@ -2,81 +2,55 @@ package sfxlambda
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/signalfx/golib/datapoint"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 )
 
-// HandlerFuncWrapper is the interface that wraps the lambda handler function.
-type HandlerFuncWrapper interface {
-	WrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error)
-	SendDatapoints(context.Context, []*datapoint.Datapoint)
-}
-
-type handlerFuncWrapper struct {
-	wrappedHandlerFunc func(context.Context, interface{}) (interface{}, error)
+type HandlerWrapper struct {
+	lambda.Handler
 	defaultDimensions  map[string]string
 	notColdStart       bool
 }
 
+func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
+	hw.defaultDimensions = defaultDimensions(ctx)
+	dps := []*datapoint.Datapoint {hw.invocationsDatapoint(),}
+	start := time.Now()
+	responseBytes, err := hw.Handler.Invoke(ctx, payload)
+	dps = append(dps, hw.durationDatapoint(time.Since(start)))
+	if err != nil {
+		dps = append(dps, hw.errorsDatapoint())
+	}
+	if !hw.notColdStart {
+		dps = append(dps, hw.coldStartsDatapoint())
+		hw.notColdStart = true
+	}
+	hw.SendDatapoints(ctx, dps)
+	return responseBytes, err
+}
+
 type dimensions map[string]string
 
-// NewHandlerFuncWrapper is the HandlerFuncWrapper factory function.
-func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
-	hfw := handlerFuncWrapper{}
-	hfw.wrappedHandlerFunc = func(ctx context.Context, payload interface{}) (interface{}, error) {
-		var response interface{}
-		var err error
-		var dps []*datapoint.Datapoint
-		start := time.Now()
-		if hfw.defaultDimensions, err = defaultDimensions(ctx); err == nil {
-			dps = append(dps, hfw.invocationsDatapoint())
-			if !hfw.notColdStart {
-				dps = append(dps, hfw.coldStartsDatapoint())
-				hfw.notColdStart = true
-			}
-			var payloadBytes, responseBytes []byte
-			if payloadBytes, err = json.Marshal(payload); err == nil {
-				if responseBytes, err = lambda.NewHandler(handlerFunc).Invoke(ctx, payloadBytes); err == nil {
-					if returnType := nonErrorReturnType(handlerFunc); returnType != nil {
-						response = reflect.New(returnType).Interface()
-						err = json.Unmarshal(responseBytes, &response)
-					}
-				}
-			}
-		}
-		if err != nil {
-			dps = append(dps, hfw.errorsDatapoint())
-		}
-		dps = append(dps, hfw.durationDatapoint(time.Since(start)))
-		hfw.SendDatapoints(ctx, dps)
-		return response, err
-	}
-	return &hfw
+func Start(handler interface{}) {
+	lambda.StartHandler(&HandlerWrapper{Handler: lambda.NewHandler(handler)})
 }
 
-// WrappedHandlerFunc returns the wrapped lambda handler function.
-func (hfw *handlerFuncWrapper) WrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error) {
-	return hfw.wrappedHandlerFunc
-}
-
-// SendDatapoint sends custom metrics to SignalFx. If ctx is nil the background context is used.
-func (hfw *handlerFuncWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
+// SendDatapoints sends custom metrics to SignalFx.
+func (hw *HandlerWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
 	sendDatapoints(ctx, dps)
 }
 
-func defaultDimensions(ctx context.Context) (map[string]string, error) {
+func defaultDimensions(ctx context.Context) map[string]string {
 	var lambdaContext *lambdacontext.LambdaContext
 	var ok bool
 	if lambdaContext, ok = lambdacontext.FromContext(ctx); !ok {
-		return nil, fmt.Errorf("failed to get *LambdaContext from %+v", ctx)
+		log.Errorf("failed to get *LambdaContext from %+v", ctx)
+		return nil
 	}
 	arnSubstrings := strings.Split(lambdaContext.InvokedFunctionArn, ":")
 	dims := dimensions {
@@ -109,7 +83,7 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	if os.Getenv("AWS_EXECUTION_ENV") != "" {
 		dims["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
 	}
-	return dims, nil
+	return dims
 }
 
 func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []string, arnSubstringIndex int)  {
@@ -120,34 +94,26 @@ func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []st
 	}
 }
 
-func nonErrorReturnType(handlerFunc interface{}) reflect.Type {
-	handlerFuncType := reflect.TypeOf(handlerFunc)
-	if handlerFuncType.NumOut() == 2 {
-		return handlerFuncType.Out(0)
-	}
-	return nil
-}
-
-func (hfw *handlerFuncWrapper) invocationsDatapoint() *datapoint.Datapoint {
+func (hw *HandlerWrapper) invocationsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.invocations", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
+	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
-func (hfw *handlerFuncWrapper) coldStartsDatapoint() *datapoint.Datapoint {
+func (hw *HandlerWrapper) coldStartsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.cold_starts", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
+	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
-func (hfw *handlerFuncWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
+func (hw *HandlerWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewFloatValue(elapsed.Seconds()), MetricType: datapoint.Gauge}
-	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
+	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
-func (hfw *handlerFuncWrapper) errorsDatapoint() *datapoint.Datapoint {
+func (hw *HandlerWrapper) errorsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.errors", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
+	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
