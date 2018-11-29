@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/signalfx/golib/datapoint"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"reflect"
 	"strings"
@@ -24,6 +25,8 @@ type handlerFuncWrapper struct {
 	defaultDimensions  map[string]string
 	notColdStart       bool
 }
+
+type dimensions map[string]string
 
 // NewHandlerFuncWrapper is the HandlerFuncWrapper factory function.
 func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
@@ -70,38 +73,46 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	if lambdaContext, ok = lambdacontext.FromContext(ctx); !ok {
 		return nil, fmt.Errorf("failed to get *LambdaContext from %+v", ctx)
 	}
-	arnTokens := strings.Split(lambdaContext.InvokedFunctionArn, ":")
-	dimensions := map[string]string{
+	arnSubstrings := strings.Split(lambdaContext.InvokedFunctionArn, ":")
+	dims := dimensions {
 		"aws_function_version": lambdacontext.FunctionVersion,
 		"aws_function_name":    lambdacontext.FunctionName,
 		"metric_source":        "lambda_wrapper",
 		//'function_wrapper_version': name + '_' + version,
 	}
-	switch {
-	case len(arnTokens) > 3: dimensions["aws_region"] = arnTokens[3]
-	case len(arnTokens) > 4: dimensions["aws_account_id"] = arnTokens[4]
-	case len(arnTokens) > 5:
-		switch arnTokens[5] {
+	dims.addArnDerivedDimension("aws_region", arnSubstrings, 3)
+	dims.addArnDerivedDimension("aws_account_id", arnSubstrings, 4)
+	if len(arnSubstrings) > 5  {
+		switch arnSubstrings[5] {
 		case "function":
-			switch len(arnTokens) {
+			arn2 := ""
+			switch len(arnSubstrings) {
 			case 8:
-				dimensions["aws_function_qualifier"] = arnTokens[7]
-				arnTokens[7] = lambdacontext.FunctionVersion
+				dims["aws_function_qualifier"] = arnSubstrings[7]
+				arn2 = strings.Join(append(arnSubstrings[:7], lambdacontext.FunctionVersion), ":")
 			case 7:
-				arnTokens = append(arnTokens, lambdacontext.FunctionVersion)
+				arn2 = strings.Join(append(arnSubstrings, lambdacontext.FunctionVersion), ":")
 			}
-			dimensions["lambda_arn"] = strings.Join(arnTokens, ":")
+			dims.addArnDerivedDimension("lambda_arn", []string{arn2}, 0)
 		case "event-source-mappings":
-			if len(arnTokens) > 6 {
-				dimensions["event_source_mappings"] = arnTokens[6]
-			}
-			dimensions["lambda_arn"] = lambdaContext.InvokedFunctionArn
+			dims["lambda_arn"] = lambdaContext.InvokedFunctionArn
+			dims.addArnDerivedDimension("event_source_mappings", arnSubstrings, 6)
 		}
+	} else {
+		log.Errorf("Invalid arn. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", len(arnSubstrings), lambdaContext.InvokedFunctionArn)
 	}
 	if os.Getenv("AWS_EXECUTION_ENV") != "" {
-		dimensions["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
+		dims["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
 	}
-	return dimensions, nil
+	return dims, nil
+}
+
+func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []string, arnSubstringIndex int)  {
+	if len(arnSubstrings) > arnSubstringIndex && arnSubstrings[arnSubstringIndex] != "" {
+		ds[dimension] = arnSubstrings[arnSubstringIndex]
+	} else {
+		log.Errorf("Invalid arn caused %s dimension value not to be set. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings,":"))
+	}
 }
 
 func nonErrorReturnType(handlerFunc interface{}) reflect.Type {
