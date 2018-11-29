@@ -28,10 +28,10 @@ func TestValidHandlerFunctions(t *testing.T) {
 		{func(context.Context, interface{}) (interface{}, error) { return nil, nil }},
 	}
 	for _, test := range tests {
-		 input, _ := json.Marshal("")
-		 if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err != nil {
-			 t.Errorf("do not want invalid lambda handler function signature error. got %+v", err)
-		 }
+		input, _ := json.Marshal("")
+		if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err != nil {
+			t.Errorf("do not want invalid lambda handler function signature error. got %+v", err)
+		}
 	}
 }
 
@@ -67,15 +67,15 @@ const (
 // arn:aws:lambda:region:account-id:event-source-mappings:event-source-mapping-id
 func TestDefaultDimensions(t *testing.T) {
 	var tests = []struct {
-		arn string
+		arn             string
 		functionVersion string
-		want map[string]string
+		want            map[string]string
 	}{
-		{"", "version", map[string]string{arKey:"", acKey:"", afKey:"",           laKey:"", esKey:""}},
-		{"arn:aws:lambda:region:account-id:function:function-name",                        "version", map[string]string{arKey:"region", acKey:"account-id", afKey:"",           laKey:"arn:aws:lambda:region:account-id:function:function-name:version", esKey:""}},
-		{"arn:aws:lambda:region:account-id:function:function-name:alias-name",             "version", map[string]string{arKey:"region", acKey:"account-id", afKey:"alias-name", laKey:"arn:aws:lambda:region:account-id:function:function-name:version", esKey:""}},
-		{"arn:aws:lambda:region:account-id:function:function-name:version",                "version", map[string]string{arKey:"region", acKey:"account-id", afKey:"version",    laKey:"arn:aws:lambda:region:account-id:function:function-name:version", esKey:""}},
-		{"arn:aws:lambda:region:account-id:event-source-mappings:event-source-mapping-id", "version", map[string]string{arKey:"region", acKey:"account-id", afKey:"",           laKey:"arn:aws:lambda:region:account-id:event-source-mappings:event-source-mapping-id", esKey:"event-source-mapping-id"}},
+		{"", "version", map[string]string{arKey: "", acKey: "", afKey: "", laKey: "", esKey: ""}},
+		{"arn:aws:lambda:region:account-id:function:function-name", "version", map[string]string{arKey: "region", acKey: "account-id", afKey: "", laKey: "arn:aws:lambda:region:account-id:function:function-name:version", esKey: ""}},
+		{"arn:aws:lambda:region:account-id:function:function-name:alias-name", "version", map[string]string{arKey: "region", acKey: "account-id", afKey: "alias-name", laKey: "arn:aws:lambda:region:account-id:function:function-name:version", esKey: ""}},
+		{"arn:aws:lambda:region:account-id:function:function-name:version", "version", map[string]string{arKey: "region", acKey: "account-id", afKey: "version", laKey: "arn:aws:lambda:region:account-id:function:function-name:version", esKey: ""}},
+		{"arn:aws:lambda:region:account-id:event-source-mappings:event-source-mapping-id", "version", map[string]string{arKey: "region", acKey: "account-id", afKey: "", laKey: "arn:aws:lambda:region:account-id:event-source-mappings:event-source-mapping-id", esKey: "event-source-mapping-id"}},
 	}
 	savedFunctionVersion := lambdacontext.FunctionVersion
 	defer func() {

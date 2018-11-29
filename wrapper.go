@@ -11,15 +11,18 @@ import (
 	"time"
 )
 
+// HandlerWrapper is a lambda.Handler implementation that delegates to the embedded lambda.Handler.
 type HandlerWrapper struct {
 	lambda.Handler
-	defaultDimensions  map[string]string
-	notColdStart       bool
+	defaultDimensions map[string]string
+	notColdStart      bool
 }
 
+// Invoke is HandlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
+// Invoke creates and sends metrics.
 func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 	hw.defaultDimensions = defaultDimensions(ctx)
-	dps := []*datapoint.Datapoint {hw.invocationsDatapoint(),}
+	dps := []*datapoint.Datapoint{hw.invocationsDatapoint()}
 	start := time.Now()
 	responseBytes, err := hw.Handler.Invoke(ctx, payload)
 	dps = append(dps, hw.durationDatapoint(time.Since(start)))
@@ -36,6 +39,8 @@ func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, e
 
 type dimensions map[string]string
 
+// Start takes a handler function and creates a HandlerWrapper which is a lambda.Handler implementation.
+// Start then passes the HandlerWrapper to method lambda.StartHandler
 func Start(handler interface{}) {
 	lambda.StartHandler(&HandlerWrapper{Handler: lambda.NewHandler(handler)})
 }
@@ -53,7 +58,7 @@ func defaultDimensions(ctx context.Context) map[string]string {
 		return nil
 	}
 	arnSubstrings := strings.Split(lambdaContext.InvokedFunctionArn, ":")
-	dims := dimensions {
+	dims := dimensions{
 		"aws_function_version": lambdacontext.FunctionVersion,
 		"aws_function_name":    lambdacontext.FunctionName,
 		"metric_source":        "lambda_wrapper",
@@ -61,7 +66,7 @@ func defaultDimensions(ctx context.Context) map[string]string {
 	}
 	dims.addArnDerivedDimension("aws_region", arnSubstrings, 3)
 	dims.addArnDerivedDimension("aws_account_id", arnSubstrings, 4)
-	if len(arnSubstrings) > 5  {
+	if len(arnSubstrings) > 5 {
 		switch arnSubstrings[5] {
 		case "function":
 			lambdaArn := ""
@@ -86,11 +91,11 @@ func defaultDimensions(ctx context.Context) map[string]string {
 	return dims
 }
 
-func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []string, arnSubstringIndex int)  {
+func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []string, arnSubstringIndex int) {
 	if len(arnSubstrings) > arnSubstringIndex && arnSubstrings[arnSubstringIndex] != "" {
 		ds[dimension] = arnSubstrings[arnSubstringIndex]
 	} else {
-		log.Errorf("Invalid arn caused %s dimension value not to be set. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings,":"))
+		log.Errorf("Invalid arn caused %s dimension value not to be set. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings, ":"))
 	}
 }
 
