@@ -14,14 +14,12 @@ import (
 // HandlerWrapper is a lambda.Handler implementation that delegates to the embedded lambda.Handler.
 type HandlerWrapper struct {
 	lambda.Handler
-	defaultDimensions map[string]string
-	notColdStart      bool
+	notColdStart bool
 }
 
 // Invoke is HandlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
 // Invoke creates and sends metrics.
 func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	hw.defaultDimensions = defaultDimensions(ctx)
 	dps := []*datapoint.Datapoint{hw.invocationsDatapoint()}
 	start := time.Now()
 	responseBytes, err := hw.Handler.Invoke(ctx, payload)
@@ -47,6 +45,10 @@ func Start(handler interface{}) {
 
 // SendDatapoints sends custom metrics to SignalFx.
 func (hw *HandlerWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
+	dims := defaultDimensions(ctx)
+	for _, dp := range dps {
+		dp.Dimensions = datapoint.AddMaps(dims, dp.Dimensions)
+	}
 	sendDatapoints(ctx, dps)
 }
 
@@ -101,24 +103,20 @@ func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []st
 
 func (hw *HandlerWrapper) invocationsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.invocations", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
 func (hw *HandlerWrapper) coldStartsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.cold_starts", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
 func (hw *HandlerWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewFloatValue(elapsed.Seconds()), MetricType: datapoint.Gauge}
-	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
 
 func (hw *HandlerWrapper) errorsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.errors", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-	dp.Dimensions = datapoint.AddMaps(hw.defaultDimensions, dp.Dimensions)
 	return &dp
 }
