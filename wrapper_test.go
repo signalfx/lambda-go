@@ -14,10 +14,10 @@ import (
 var ctx = lambdacontext.NewContext(context.TODO(), &lambdacontext.LambdaContext{InvokedFunctionArn: "arn:aws:lambda:us-east-1:accountId:function:functionName:$LATEST"})
 
 func TestValidHandlerFunctions(t *testing.T) {
-	savedSendDatapoint := sendDatapoint
-	sendDatapoint = func(ctx context.Context, dp *datapoint.Datapoint) {}
+	savedSendDatapoint := sendDatapoints
+	sendDatapoints = func(ctx context.Context, dps []*datapoint.Datapoint) {}
 	defer func() {
-		sendDatapoint = savedSendDatapoint
+		sendDatapoints = savedSendDatapoint
 	}()
 	var tests = []struct {
 		handlerFunc interface{}
@@ -43,10 +43,10 @@ func TestValidHandlerFunctions(t *testing.T) {
 }
 
 func TestInValidHandlerFunctions(t *testing.T) {
-	savedSendDatapoint := sendDatapoint
-	sendDatapoint = func(ctx context.Context, dp *datapoint.Datapoint) {}
+	savedSendDatapoint := sendDatapoints
+	sendDatapoints = func(ctx context.Context, dps []*datapoint.Datapoint) {}
 	defer func() {
-		sendDatapoint = savedSendDatapoint
+		sendDatapoints = savedSendDatapoint
 	}()
 	var tests = []struct {
 		handlerFunc interface{}
@@ -64,7 +64,7 @@ func TestInValidHandlerFunctions(t *testing.T) {
 	}
 }
 
-func TestSendDatapoint(t *testing.T) {
+func TestSendDatapoints(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer func() {

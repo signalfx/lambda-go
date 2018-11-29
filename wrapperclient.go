@@ -44,16 +44,19 @@ func init() {
 	}
 }
 
-var sendDatapoint = func(ctx context.Context, dp *datapoint.Datapoint) {
+var sendDatapoints = func(ctx context.Context, dps []*datapoint.Datapoint) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if dp.Timestamp.IsZero() {
-		dp.Timestamp = time.Now()
+	now := time.Now()
+	for _, dp := range dps {
+		if dp.Timestamp.IsZero() {
+			dp.Timestamp = now
+		}
 	}
-	go func(ctx context.Context, dp *datapoint.Datapoint) {
-		if err := handlerFuncWrapperClient.AddDatapoints(ctx, []*datapoint.Datapoint{dp}); err != nil {
+	go func(ctx context.Context, dps []*datapoint.Datapoint) {
+		if err := handlerFuncWrapperClient.AddDatapoints(ctx, dps); err != nil {
 			log.Errorf("Error sending datapoint to SignalFx: %+v", err)
 		}
-	}(ctx, dp)
+	}(ctx, dps)
 }

@@ -17,7 +17,7 @@ import (
 // HandlerFuncWrapper is the interface that wraps the lambda handler function.
 type HandlerFuncWrapper interface {
 	WrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error)
-	SendDatapoint(context.Context, *datapoint.Datapoint)
+	SendDatapoints(context.Context, []*datapoint.Datapoint)
 }
 
 type handlerFuncWrapper struct {
@@ -34,10 +34,14 @@ func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
 	hfw.wrappedHandlerFunc = func(ctx context.Context, payload interface{}) (interface{}, error) {
 		var response interface{}
 		var err error
+		var dps []*datapoint.Datapoint
 		start := time.Now()
 		if hfw.defaultDimensions, err = defaultDimensions(ctx); err == nil {
-			hfw.sendInvocationsDatapoint()
-			hfw.sendColdStartsDatapoint()
+			dps = append(dps, hfw.invocationsDatapoint())
+			if !hfw.notColdStart {
+				dps = append(dps, hfw.coldStartsDatapoint())
+				hfw.notColdStart = true
+			}
 			var payloadBytes, responseBytes []byte
 			if payloadBytes, err = json.Marshal(payload); err == nil {
 				if responseBytes, err = lambda.NewHandler(handlerFunc).Invoke(ctx, payloadBytes); err == nil {
@@ -49,9 +53,10 @@ func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
 			}
 		}
 		if err != nil {
-			hfw.sendErrorsDatapoint()
+			dps = append(dps, hfw.errorsDatapoint())
 		}
-		hfw.sendDurationDatapoint(time.Since(start))
+		dps = append(dps, hfw.durationDatapoint(time.Since(start)))
+		hfw.SendDatapoints(ctx, dps)
 		return response, err
 	}
 	return &hfw
@@ -63,8 +68,8 @@ func (hfw *handlerFuncWrapper) WrappedHandlerFunc() func(context.Context, interf
 }
 
 // SendDatapoint sends custom metrics to SignalFx. If ctx is nil the background context is used.
-func (hfw *handlerFuncWrapper) SendDatapoint(ctx context.Context, dp *datapoint.Datapoint) {
-	sendDatapoint(ctx, dp)
+func (hfw *handlerFuncWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
+	sendDatapoints(ctx, dps)
 }
 
 func defaultDimensions(ctx context.Context) (map[string]string, error) {
@@ -123,29 +128,26 @@ func nonErrorReturnType(handlerFunc interface{}) reflect.Type {
 	return nil
 }
 
-func (hfw *handlerFuncWrapper) sendInvocationsDatapoint() {
+func (hfw *handlerFuncWrapper) invocationsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.invocations", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
-	sendDatapoint(nil, &dp)
+	return &dp
 }
 
-func (hfw *handlerFuncWrapper) sendColdStartsDatapoint() {
-	if !hfw.notColdStart {
-		dp := datapoint.Datapoint{Metric: "function.cold_starts", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
-		dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
-		sendDatapoint(nil, &dp)
-	}
-	hfw.notColdStart = true
+func (hfw *handlerFuncWrapper) coldStartsDatapoint() *datapoint.Datapoint {
+	dp := datapoint.Datapoint{Metric: "function.cold_starts", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
+	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
+	return &dp
 }
 
-func (hfw *handlerFuncWrapper) sendDurationDatapoint(elapsed time.Duration) {
+func (hfw *handlerFuncWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewFloatValue(elapsed.Seconds()), MetricType: datapoint.Gauge}
 	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
-	sendDatapoint(nil, &dp)
+	return &dp
 }
 
-func (hfw *handlerFuncWrapper) sendErrorsDatapoint() {
+func (hfw *handlerFuncWrapper) errorsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.errors", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	dp.Dimensions = datapoint.AddMaps(hfw.defaultDimensions, dp.Dimensions)
-	sendDatapoint(nil, &dp)
+	return &dp
 }
