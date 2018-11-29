@@ -13,27 +13,33 @@ import (
 
 var handlerFuncWrapperClient *sfxclient.HTTPSink
 
+const (
+	sfxAuthToken = "SIGNALFX_AUTH_TOKEN"
+	sfxIngestEndpoint = "SIGNALFX_INGEST_ENDPOINT"
+	sfxSendTimeoutSeconds= "SIGNALFX_SEND_TIMEOUT_SECONDS"
+	)
+
 func init() {
 	handlerFuncWrapperClient = sfxclient.NewHTTPSink()
-	if handlerFuncWrapperClient.AuthToken = os.Getenv("SIGNALFX_AUTH_TOKEN"); handlerFuncWrapperClient.AuthToken == "" {
-		log.Fatalf("Required environment variable SIGNALFX_AUTH_TOKEN is not set")
+	if handlerFuncWrapperClient.AuthToken = os.Getenv(sfxAuthToken); handlerFuncWrapperClient.AuthToken == "" {
+		log.Fatalf("Required environment variable %s is not set", sfxAuthToken)
 	}
-	if os.Getenv("SIGNALFX_INGEST_ENDPOINT") != "" {
-		if ingestURL, err := url.Parse(os.Getenv("SIGNALFX_INGEST_ENDPOINT")); err == nil {
+	if os.Getenv(sfxIngestEndpoint) != "" {
+		if ingestURL, err := url.Parse(os.Getenv(sfxIngestEndpoint)); err == nil {
 			if ingestURL, err = ingestURL.Parse("v2/datapoint"); err == nil {
 				handlerFuncWrapperClient.DatapointEndpoint = ingestURL.String()
 			} else {
-				log.Fatalf("Error parsing environment variable SIGNALFX_INGEST_ENDPOINT url value %s: %+v", os.Getenv("SIGNALFX_INGEST_ENDPOINT"), err)
+				log.Fatalf("Error parsing environment variable %s url value %s: %+v", sfxIngestEndpoint, os.Getenv(sfxIngestEndpoint), err)
 			}
 		} else {
 			log.Fatalf("Error parsing ingest url path v2/datapoint: %+v", err)
 		}
 	}
-	if os.Getenv("SIGNALFX_SEND_TIMEOUT") != "" {
-		if timeout, err := time.ParseDuration(strings.TrimSpace(os.Getenv("SIGNALFX_SEND_TIMEOUT")) + "s"); err == nil {
+	if os.Getenv(sfxSendTimeoutSeconds) != "" {
+		if timeout, err := time.ParseDuration(strings.TrimSpace(os.Getenv(sfxSendTimeoutSeconds)) + "s"); err == nil {
 			handlerFuncWrapperClient.Client.Timeout = timeout
 		} else {
-			log.Fatalf("Error parsing environment variable SIGNALFX_SEND_TIMEOUT timeout value %s: %+v", os.Getenv("SIGNALFX_SEND_TIMEOUT"), err)
+			log.Fatalf("Error parsing environment variable %s timeout value %s: %+v", sfxSendTimeoutSeconds, os.Getenv(sfxSendTimeoutSeconds), err)
 		}
 	}
 }
@@ -42,7 +48,7 @@ var sendDatapoint = func(ctx context.Context, dp *datapoint.Datapoint) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if &dp.Timestamp == nil {
+	if dp.Timestamp.IsZero() {
 		dp.Timestamp = time.Now()
 	}
 	go func(ctx context.Context, dp *datapoint.Datapoint) {

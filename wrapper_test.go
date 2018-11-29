@@ -35,7 +35,7 @@ func TestValidHandlerFunctions(t *testing.T) {
 	}
 	for _, test := range tests {
 		handlerFuncWrapper := NewHandlerFuncWrapper(test.handlerFunc)
-		wrappedHandlerFunc := handlerFuncWrapper.GetWrappedHandlerFunc()
+		wrappedHandlerFunc := handlerFuncWrapper.WrappedHandlerFunc()
 		if _, got := wrappedHandlerFunc(ctx, nil); got != test.want {
 			t.Errorf("EXPECTED %+v but GOT %+v", test.want, got)
 		}
@@ -57,7 +57,7 @@ func TestInValidHandlerFunctions(t *testing.T) {
 	}
 	for _, test := range tests {
 		handlerFuncWrapper := NewHandlerFuncWrapper(test.handlerFunc)
-		wrappedHandlerFunc := handlerFuncWrapper.GetWrappedHandlerFunc()
+		wrappedHandlerFunc := handlerFuncWrapper.WrappedHandlerFunc()
 		if _, got := wrappedHandlerFunc(ctx, nil); got == nil {
 			t.Errorf("EXPECTED an error but GOT %+v", got)
 		}
@@ -70,7 +70,7 @@ func TestSendDatapoint(t *testing.T) {
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
-	NewHandlerFuncWrapper(func() {}).GetWrappedHandlerFunc()(ctx, nil)
+	NewHandlerFuncWrapper(func() {}).WrappedHandlerFunc()(ctx, nil)
 	time.Sleep(1000 * time.Millisecond)
 	if buf.Len() == 0 {
 		t.Errorf("EXPECTED error sending datapoint to SignalFx log message")

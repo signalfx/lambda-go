@@ -15,7 +15,7 @@ import (
 
 // HandlerFuncWrapper is the interface that wraps the lambda handler function.
 type HandlerFuncWrapper interface {
-	GetWrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error)
+	WrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error)
 	SendDatapoint(context.Context, *datapoint.Datapoint)
 }
 
@@ -32,14 +32,14 @@ func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
 		var response interface{}
 		var err error
 		start := time.Now()
-		if hfw.defaultDimensions, err = getDefaultDimensions(ctx); err == nil {
+		if hfw.defaultDimensions, err = defaultDimensions(ctx); err == nil {
 			hfw.sendInvocationsDatapoint()
 			hfw.sendColdStartsDatapoint()
 			var payloadBytes, responseBytes []byte
 			if payloadBytes, err = json.Marshal(payload); err == nil {
 				if responseBytes, err = lambda.NewHandler(handlerFunc).Invoke(ctx, payloadBytes); err == nil {
-					if nonErrorReturnType := getNonErrorReturnType(handlerFunc); nonErrorReturnType != nil {
-						response = reflect.New(nonErrorReturnType).Interface()
+					if returnType := nonErrorReturnType(handlerFunc); returnType != nil {
+						response = reflect.New(returnType).Interface()
 						err = json.Unmarshal(responseBytes, &response)
 					}
 				}
@@ -54,8 +54,8 @@ func NewHandlerFuncWrapper(handlerFunc interface{}) HandlerFuncWrapper {
 	return &hfw
 }
 
-// GetWrappedHandlerFunc returns the wrapped lambda handler function.
-func (hfw *handlerFuncWrapper) GetWrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error) {
+// WrappedHandlerFunc returns the wrapped lambda handler function.
+func (hfw *handlerFuncWrapper) WrappedHandlerFunc() func(context.Context, interface{}) (interface{}, error) {
 	return hfw.wrappedHandlerFunc
 }
 
@@ -64,42 +64,47 @@ func (hfw *handlerFuncWrapper) SendDatapoint(ctx context.Context, dp *datapoint.
 	sendDatapoint(ctx, dp)
 }
 
-func getDefaultDimensions(ctx context.Context) (map[string]string, error) {
-	if lambdaContext, ok := lambdacontext.FromContext(ctx); ok {
-		if strings.TrimSpace(lambdaContext.InvokedFunctionArn) == "" {
-			return nil, fmt.Errorf("lambda function arn cannot be blank")
-		}
-		// Expected function arn format arn:aws:lambda:us-east-1:accountId:function:functionName:$LATEST
-		arnTokens := strings.Split(lambdaContext.InvokedFunctionArn, ":")
-		dimensions := map[string]string{
-			"aws_function_version": lambdacontext.FunctionVersion,
-			"aws_function_name":    lambdacontext.FunctionName,
-			"aws_region":           arnTokens[3],
-			"aws_account_id":       arnTokens[4],
-			"metric_source":        "lambda_wrapper",
-			//'function_wrapper_version': name + '_' + version,
-		}
-		if os.Getenv("AWS_EXECUTION_ENV") != "" {
-			dimensions["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
-		}
-		if arnTokens[5] == "function" {
-			if len(arnTokens) == 8 {
+func defaultDimensions(ctx context.Context) (map[string]string, error) {
+	var lambdaContext *lambdacontext.LambdaContext
+	var ok bool
+	if lambdaContext, ok = lambdacontext.FromContext(ctx); !ok {
+		return nil, fmt.Errorf("failed to get *LambdaContext from %+v", ctx)
+	}
+	arnTokens := strings.Split(lambdaContext.InvokedFunctionArn, ":")
+	dimensions := map[string]string{
+		"aws_function_version": lambdacontext.FunctionVersion,
+		"aws_function_name":    lambdacontext.FunctionName,
+		"metric_source":        "lambda_wrapper",
+		//'function_wrapper_version': name + '_' + version,
+	}
+	switch {
+	case len(arnTokens) > 3: dimensions["aws_region"] = arnTokens[3]
+	case len(arnTokens) > 4: dimensions["aws_account_id"] = arnTokens[4]
+	case len(arnTokens) > 5:
+		switch arnTokens[5] {
+		case "function":
+			switch len(arnTokens) {
+			case 8:
 				dimensions["aws_function_qualifier"] = arnTokens[7]
 				arnTokens[7] = lambdacontext.FunctionVersion
-			} else if len(arnTokens) == 7 {
+			case 7:
 				arnTokens = append(arnTokens, lambdacontext.FunctionVersion)
 			}
 			dimensions["lambda_arn"] = strings.Join(arnTokens, ":")
-		} else if arnTokens[5] == "event-source-mappings" {
-			dimensions["event_source_mappings"] = arnTokens[6]
+		case "event-source-mappings":
+			if len(arnTokens) > 6 {
+				dimensions["event_source_mappings"] = arnTokens[6]
+			}
 			dimensions["lambda_arn"] = lambdaContext.InvokedFunctionArn
 		}
-		return dimensions, nil
 	}
-	return nil, fmt.Errorf("failed to get *LambdaContext from %+v", ctx)
+	if os.Getenv("AWS_EXECUTION_ENV") != "" {
+		dimensions["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
+	}
+	return dimensions, nil
 }
 
-func getNonErrorReturnType(handlerFunc interface{}) reflect.Type {
+func nonErrorReturnType(handlerFunc interface{}) reflect.Type {
 	handlerFuncType := reflect.TypeOf(handlerFunc)
 	if handlerFuncType.NumOut() == 2 {
 		return handlerFuncType.Out(0)
