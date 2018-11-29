@@ -90,15 +90,15 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	if len(arnSubstrings) > 5  {
 		switch arnSubstrings[5] {
 		case "function":
-			arn2 := ""
+			lambdaArn := ""
 			switch len(arnSubstrings) {
 			case 8:
 				dims["aws_function_qualifier"] = arnSubstrings[7]
-				arn2 = strings.Join(append(arnSubstrings[:7], lambdacontext.FunctionVersion), ":")
+				lambdaArn = strings.Join(append(arnSubstrings[:7], lambdacontext.FunctionVersion), ":")
 			case 7:
-				arn2 = strings.Join(append(arnSubstrings, lambdacontext.FunctionVersion), ":")
+				lambdaArn = strings.Join(append(arnSubstrings, lambdacontext.FunctionVersion), ":")
 			}
-			dims.addArnDerivedDimension("lambda_arn", []string{arn2}, 0)
+			dims.addArnDerivedDimension("lambda_arn", []string{lambdaArn}, 0)
 		case "event-source-mappings":
 			dims["lambda_arn"] = lambdaContext.InvokedFunctionArn
 			dims.addArnDerivedDimension("event_source_mappings", arnSubstrings, 6)
