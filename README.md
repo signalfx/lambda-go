@@ -106,7 +106,7 @@ func handler(...) ... {
       Dimensions: map[string]string{"db_name":"mysql1",},
   }
   // Sending custom metric to SignalFx.
-  handlerFuncWrapper.SendDatapoint(ctx, &dp)
+  handlerFuncWrapper.SendDatapoints(ctx, []*datapoint.Datapoint{&dp})
   ...
 }
 ...
@@ -129,4 +129,4 @@ Run the command below in the lambda-go package folder
 
 ## License
 
-Apache Software License v2. Copyright © 2014-2017 SignalFx
+Apache Software License v2. Copyright © 2014-2018 SignalFx
