@@ -18,31 +18,31 @@ jobs:
   lint:
     executor: goexecutor
     steps:
-      - checkout
       - goexecutor_setup
+      - checkout
       - run: |
           go get -u golang.org/x/lint/golint
           golint
   vet:
     executor: goexecutor
     steps:
-      - checkout
       - goexecutor_setup
+      - checkout
       - run: |
           go vet
   fmt:
     executor: goexecutor
     steps:
-      - checkout
       - goexecutor_setup
+      - checkout
       - run: |
           go fmt
           git diff --exit-code || (echo 'go files need to be reformatted. Run `go fmt` in the dev image and commit the changes.' && exit 1)
   tests:
     executor: goexecutor
     steps:
-      - checkout
       - goexecutor_setup
+      - checkout
       - run: |
           SIGNALFX_AUTH_TOKEN=test go test -v
 
