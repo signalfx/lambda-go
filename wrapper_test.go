@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	log "github.com/sirupsen/logrus"
-	"io/ioutil"
-	"os"
 	"testing"
 )
 
@@ -30,7 +27,7 @@ func TestValidHandlerFunctions(t *testing.T) {
 	for _, test := range tests {
 		input, _ := json.Marshal("")
 		if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err != nil {
-			t.Errorf("do not want invalid lambda handler function signature error. got %+v", err)
+			t.Errorf("valid lambda handler function invocation error. got %+v", err)
 		}
 	}
 }
@@ -46,7 +43,7 @@ func TestInValidHandlerFunctions(t *testing.T) {
 	for _, test := range tests {
 		input, _ := json.Marshal("")
 		if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err == nil {
-			t.Errorf("want invalid lambda handler function signature error. got %+v", nil)
+			t.Errorf("invalid lambda handler function invocation error. got %+v", err)
 		}
 	}
 }
@@ -120,12 +117,10 @@ func TestDefaultDimensions(t *testing.T) {
 	savedFunctionVersion := lambdacontext.FunctionVersion
 	defer func() {
 		lambdacontext.FunctionVersion = savedFunctionVersion
-		log.SetOutput(os.Stderr)
 	}()
-	log.SetOutput(ioutil.Discard)
 	for _, test := range tests {
 		lambdacontext.FunctionVersion = test.functionVersion
-		got := defaultDimensions(newCtx(test.arn))
+		got, _ := defaultDimensions(newCtx(test.arn))
 		keys := []string{arKey, acKey, afKey, laKey, esKey}
 		for _, k := range keys {
 			if got[k] != test.want[k] {
