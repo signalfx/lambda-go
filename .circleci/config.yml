@@ -1,0 +1,55 @@
+# Golang CircleCI 2.1 configuration file
+#
+# Check https://circleci.com/docs/2.1/language-go/ for more details
+version: 2.1
+
+executors:
+  goexecutor:
+    working_directory: /go/src/github.com/signalfx/lambda-go
+    docker:
+      - image: golang:1.10-alpine
+
+commands:
+  goexecutor_setup:
+    steps:
+      - run: apk add --no-cache curl make git bash coreutils
+
+jobs:
+  lint:
+    executor: goexecutor
+    steps:
+      - goexecutor_setup
+      - checkout
+      - run: |
+          go get -u golang.org/x/lint/golint
+          golint
+  vet:
+    executor: goexecutor
+    steps:
+      - goexecutor_setup
+      - checkout
+      - run: |
+          go vet
+  fmt:
+    executor: goexecutor
+    steps:
+      - goexecutor_setup
+      - checkout
+      - run: |
+          go fmt
+          git diff --exit-code || (echo 'go files need to be reformatted. Run `go fmt` in the dev image and commit the changes.' && exit 1)
+  tests:
+    executor: goexecutor
+    steps:
+      - goexecutor_setup
+      - checkout
+      - run: |
+          SIGNALFX_AUTH_TOKEN=test go test -v
+
+workflows:
+  run_jobs:
+    jobs:
+      - lint
+      - vet
+      - fmt
+      - tests
