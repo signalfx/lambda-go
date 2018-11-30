@@ -22,24 +22,24 @@ const (
 func init() {
 	handlerFuncWrapperClient = sfxclient.NewHTTPSink()
 	if handlerFuncWrapperClient.AuthToken = os.Getenv(sfxAuthToken); handlerFuncWrapperClient.AuthToken == "" {
-		log.Errorf("No value for environment variable %s", sfxAuthToken)
+		log.Errorf("no value for environment variable %s", sfxAuthToken)
 	}
 	if os.Getenv(sfxIngestEndpoint) != "" {
 		if ingestURL, err := url.Parse(os.Getenv(sfxIngestEndpoint)); err == nil {
 			if ingestURL, err = ingestURL.Parse("v2/datapoint"); err == nil {
 				handlerFuncWrapperClient.DatapointEndpoint = ingestURL.String()
 			} else {
-				log.Errorf("Error parsing ingest url path v2/datapoint: %+v", err)
+				log.Errorf("error parsing ingest url path v2/datapoint: %+v", err)
 			}
 		} else {
-			log.Errorf("Error parsing url value %s of environment variable %s. %+v", os.Getenv(sfxIngestEndpoint), sfxIngestEndpoint, err)
+			log.Errorf("error parsing url value %s of environment variable %s. %+v", os.Getenv(sfxIngestEndpoint), sfxIngestEndpoint, err)
 		}
 	}
 	if os.Getenv(sfxSendTimeoutSeconds) != "" {
 		if timeout, err := time.ParseDuration(strings.TrimSpace(os.Getenv(sfxSendTimeoutSeconds)) + "s"); err == nil {
 			handlerFuncWrapperClient.Client.Timeout = timeout
 		} else {
-			log.Errorf("Error parsing timeout value %s of environment variable %s. %+v", os.Getenv(sfxSendTimeoutSeconds), sfxSendTimeoutSeconds, err)
+			log.Errorf("error parsing timeout value %s of environment variable %s. %+v", os.Getenv(sfxSendTimeoutSeconds), sfxSendTimeoutSeconds, err)
 		}
 	}
 }
@@ -53,7 +53,7 @@ func sendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
 	}
 	go func(ctx context.Context, dps []*datapoint.Datapoint) {
 		if err := handlerFuncWrapperClient.AddDatapoints(ctx, dps); err != nil {
-			log.Errorf("Error sending datapoint to SignalFx: %+v", err)
+			log.Errorf("error sending datapoint to SignalFx: %+v", err)
 		}
 	}(ctx, dps)
 }

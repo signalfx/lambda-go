@@ -12,15 +12,29 @@ import (
 	"time"
 )
 
-// HandlerWrapper is a lambda.Handler implementation that delegates to the embedded lambda.Handler.
-type HandlerWrapper struct {
-	lambda.Handler
-	notColdStart bool
+// HandlerWrapper extends interface lambda.Handler to support sending metric datapoints.
+type HandlerWrapper interface {
+	Invoke(ctx context.Context, payload []byte) ([]byte, error)
+	SendDatapoints(dps []*datapoint.Datapoint) error
 }
 
-// Invoke is HandlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
+// handlerWrapper is a HandlerWrapper and lambda.Handler implementation.
+// handlerWrapper delegates lambda handler function invocation to the embedded lambda.Handler.
+type handlerWrapper struct {
+	lambda.Handler
+	notColdStart bool
+	ctx          *context.Context
+}
+
+// NewHandlerWrapper is a HandlerWrapper creating factory function.
+func NewHandlerWrapper(handler lambda.Handler) HandlerWrapper {
+	return &handlerWrapper{Handler: handler}
+}
+
+// Invoke is handlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
 // Invoke creates and sends metrics.
-func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
+func (hw *handlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
+	hw.ctx = &ctx
 	dps := []*datapoint.Datapoint{hw.invocationsDatapoint()}
 	if !hw.notColdStart {
 		dps = append(dps, hw.coldStartsDatapoint())
@@ -32,7 +46,7 @@ func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, e
 	if err != nil {
 		dps = append(dps, hw.errorsDatapoint())
 	}
-	if err2 := hw.SendDatapoints(ctx, dps); err2 != nil {
+	if err2 := hw.sendDatapoints(ctx, dps); err2 != nil {
 		log.Error(err2)
 	}
 	return responseBytes, err
@@ -40,14 +54,17 @@ func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, e
 
 type dimensions map[string]string
 
-// Start takes a handler function and creates a HandlerWrapper which is a lambda.Handler implementation.
-// Start then passes the HandlerWrapper to method lambda.StartHandler
-func Start(handler interface{}) {
-	lambda.StartHandler(&HandlerWrapper{Handler: lambda.NewHandler(handler)})
+// Start takes HandlerWrapper, a lambda.Handler implementation and passes it function lambda.StartHandler
+func Start(handler HandlerWrapper) {
+	lambda.StartHandler(handler)
 }
 
-// SendDatapoints sends custom metrics to SignalFx.
-func (hw *HandlerWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) error {
+// SendDatapoints sends custom metric datapoints to SignalFx.
+func (hw *handlerWrapper) SendDatapoints(dps []*datapoint.Datapoint) error {
+	return hw.sendDatapoints(*hw.ctx, dps)
+}
+
+func (hw *handlerWrapper) sendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) error {
 	if ctx == nil {
 		return fmt.Errorf("invalid argument. context is nil")
 	}
@@ -122,22 +139,22 @@ func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []st
 	return fmt.Errorf("invalid arn caused %s dimension value not to be set. got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings, ":"))
 }
 
-func (hw *HandlerWrapper) invocationsDatapoint() *datapoint.Datapoint {
+func (hw *handlerWrapper) invocationsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.invocations", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	return &dp
 }
 
-func (hw *HandlerWrapper) coldStartsDatapoint() *datapoint.Datapoint {
+func (hw *handlerWrapper) coldStartsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.cold_starts", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	return &dp
 }
 
-func (hw *HandlerWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
+func (hw *handlerWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewFloatValue(elapsed.Seconds()), MetricType: datapoint.Gauge}
 	return &dp
 }
 
-func (hw *HandlerWrapper) errorsDatapoint() *datapoint.Datapoint {
+func (hw *handlerWrapper) errorsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.errors", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	return &dp
 }

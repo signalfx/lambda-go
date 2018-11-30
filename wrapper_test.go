@@ -26,7 +26,8 @@ func TestValidHandlerFunctions(t *testing.T) {
 	}
 	for _, test := range tests {
 		input, _ := json.Marshal("")
-		if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err != nil {
+
+		if _, err := NewHandlerWrapper(lambda.NewHandler(test.handlerFunc)).Invoke(ctx, input); err != nil {
 			t.Errorf("valid lambda handler function invocation error. got %+v", err)
 		}
 	}
@@ -42,7 +43,7 @@ func TestInValidHandlerFunctions(t *testing.T) {
 	}
 	for _, test := range tests {
 		input, _ := json.Marshal("")
-		if _, err := (&HandlerWrapper{Handler: lambda.NewHandler(test.handlerFunc)}).Invoke(ctx, input); err == nil {
+		if _, err := NewHandlerWrapper(lambda.NewHandler(test.handlerFunc)).Invoke(ctx, input); err == nil {
 			t.Errorf("invalid lambda handler function invocation error. got %+v", err)
 		}
 	}
