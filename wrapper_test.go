@@ -5,12 +5,20 @@ import (
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/signalfx/golib/datapoint"
 	"testing"
 )
 
 var ctx = lambdacontext.NewContext(context.TODO(), &lambdacontext.LambdaContext{InvokedFunctionArn: "arn:aws:lambda:us-east-1:accountId:function:functionName:$LATEST"})
 
 func TestValidHandlerFunctions(t *testing.T) {
+	savedSendDatapoints := sendDatapoints
+	defer func() {
+		sendDatapoints = savedSendDatapoints
+	}()
+	sendDatapoints = func(context.Context, []*datapoint.Datapoint) error {
+		return nil
+	}
 	var tests = []struct {
 		handlerFunc interface{}
 	}{
@@ -34,6 +42,13 @@ func TestValidHandlerFunctions(t *testing.T) {
 }
 
 func TestInValidHandlerFunctions(t *testing.T) {
+	savedSendDatapoints := sendDatapoints
+	defer func() {
+		sendDatapoints = savedSendDatapoints
+	}()
+	sendDatapoints = func(context.Context, []*datapoint.Datapoint) error {
+		return nil
+	}
 	var tests = []struct {
 		handlerFunc interface{}
 	}{

@@ -68,13 +68,23 @@ func (hw *handlerWrapper) sendDatapoints(ctx context.Context, dps []*datapoint.D
 	if ctx == nil {
 		return fmt.Errorf("invalid argument. context is nil")
 	}
-	dims, err := defaultDimensions(ctx)
+	var errs []string
+	var dims map[string]string
+	var err error
+	if dims, err = defaultDimensions(ctx); err != nil {
+		errs = append(errs, err.Error())
+	}
 	// Adding dimensions to datapoints with checking for errors. Valid dimensions (dims) and errors (err) possible.
 	for _, dp := range dps {
 		dp.Dimensions = datapoint.AddMaps(dims, dp.Dimensions)
 	}
-	sendDatapoints(ctx, dps)
-	return err
+	if err = sendDatapoints(ctx, dps); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf(strings.Join(errs, "\n"))
 }
 
 // defaultDimensions derives metric dimensions from AWS Lambda ARN. Formats and examples of AWS Lambda ARNs are in the
@@ -82,7 +92,7 @@ func (hw *handlerWrapper) sendDatapoints(ctx context.Context, dps []*datapoint.D
 func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	var lambdaContext *lambdacontext.LambdaContext
 	var ok bool
-	var errs []string
+
 	if lambdaContext, ok = lambdacontext.FromContext(ctx); !ok {
 		return nil, fmt.Errorf("failed to get *LambdaContext from %+v", ctx)
 	}
@@ -93,6 +103,7 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 		"metric_source":        "lambda_wrapper",
 		//'function_wrapper_version': name + '_' + version,
 	}
+	var errs []string
 	if err := dims.addArnDerivedDimension("aws_region", arnSubstrings, 3); err != nil {
 		errs = append(errs, err.Error())
 	}

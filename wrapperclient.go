@@ -2,6 +2,7 @@ package sfxlambda
 
 import (
 	"context"
+	"fmt"
 	"github.com/signalfx/golib/datapoint"
 	"github.com/signalfx/golib/sfxclient"
 	log "github.com/sirupsen/logrus"
@@ -44,16 +45,15 @@ func init() {
 	}
 }
 
-func sendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) {
+var sendDatapoints = func(ctx context.Context, dps []*datapoint.Datapoint) error {
 	now := time.Now()
 	for _, dp := range dps {
 		if dp.Timestamp.IsZero() {
 			dp.Timestamp = now
 		}
 	}
-	go func(ctx context.Context, dps []*datapoint.Datapoint) {
-		if err := handlerFuncWrapperClient.AddDatapoints(ctx, dps); err != nil {
-			log.Errorf("error sending datapoint to SignalFx: %+v", err)
-		}
-	}(ctx, dps)
+	if err := handlerFuncWrapperClient.AddDatapoints(ctx, dps); err != nil {
+		return fmt.Errorf("error sending datapoint to SignalFx. %+v", err)
+	}
+	return nil
 }
