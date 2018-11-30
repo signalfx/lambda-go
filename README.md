@@ -1,9 +1,7 @@
 # SignalFx Go Lambda Wrapper
-
 SignalFx Golang Lambda Wrapper.
 
 ## Usage
-
 The SignalFx Go Lambda Wrapper is a wrapper around an AWS Lambda Go function handler, used to instrument execution of the function and send metrics to SignalFx.
 
 ### Installation
@@ -22,9 +20,10 @@ values of the other variables accordingly if desired.
 `SIGNALFX_SEND_TIMEOUT_SECONDS=5`
 
 ###  Wrapping a function
-The SignalFx Go Lambda Wrapper wraps a valid Lambda handler function. Calling the `WrappedHandlerFunc()` 
-HandlerFuncWrapper method returns the wrapped handler function which can then be passed to the 
-`Start()` method. See the example below.
+The SignalFx Go Lambda Wrapper wraps `lambda.Handler`. Use the `lambda.NewHandler` function to create the `lambda.Handler` 
+from your Lambda handler function then pass it to the `sfxlambda.NewHandlerWrapper` function to create the 
+`sfxlambda.HandlerWrapper`. Pass the `sfxlambda.HandlerWrapper` to the 
+`Start()` function. See the example below.
 
 ```
 import (
@@ -41,17 +40,15 @@ func handler(...) ... {
 ...
 
 func main() {
-  ...	
-  handlerFuncWrapper := sfxlambda.NewHandlerFuncWrapper(handler)
-  wrappedHandlerFunc := handlerFuncWrapper.WrappedHandlerFunc()
-  lambda.Start(wrappedHandlerFunc)
+  ...
+  handlerWrapper := sfxlambda.NewHandlerWrapper(lambda.NewHandler(handler))
+  sfxlambda.Start(handlerWrapper)
   ...
 }
 ...
 ```
 
 ### Metrics and dimensions sent by the wrapper
-
 The Lambda wrapper sends the following metrics to SignalFx:
 
 | Metric Name  | Type | Description |
@@ -78,9 +75,9 @@ The Lambda wrapper adds the following dimensions to all data points sent to Sign
 
 
 ### Sending custom metric in the Lambda function
-Use the `SendDatapoint()` method of HandlerFuncWrapper to send custom metrics/datapoints to SignalFx from within the 
-Lambda handler function. The HandlerFuncWrapper variable needs to be declared globally in order to be accessible within
-the Lambda handler function. See example below.
+Use the `SendDatapoint()` method of HandlerWrapper to send custom metrics/datapoints to SignalFx from within the 
+Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be 
+accessible within your Lambda handler function. See example below.
 
 ```
 import (
@@ -91,13 +88,11 @@ import (
 )
 ...
 
-var handlerFuncWrapper sfxlambda.HandlerFuncWrapper
+var handlerWrapper sfxlambda.HandlerWrapper
 ...
 
 func handler(...) ... {
   ...  
-  // Timeout context for sending custom metric.
-  ctx, _ := context.WithTimeout(context.Background(), 200 * time.Millisecond)
   // Custom counter metric.
   dp := datapoint.Datapoint {
       Metric: "db_calls",
@@ -106,21 +101,19 @@ func handler(...) ... {
       Dimensions: map[string]string{"db_name":"mysql1",},
   }
   // Sending custom metric to SignalFx.
-  handlerFuncWrapper.SendDatapoints(ctx, []*datapoint.Datapoint{&dp})
+  handlerWrapper.SendDatapoints([]*datapoint.Datapoint{&dp})
   ...
 }
 ...
 
 func main() {
-  ...	
-  handlerFuncWrapper = sfxlambda.NewHandlerFuncWrapper(handler)
-  wrappedHandlerFunc := handlerFuncWrapper.WrappedHandlerFunc()
-  lambda.Start(wrappedHandlerFunc)
+  ...
+  handlerWrapper = sfxlambda.NewHandlerWrapper(lambda.NewHandler(handler))
+  sfxlambda.Start(handlerWrapper)
   ...
 }
 ...
 ```
-
 
 ### Testing locally.
 Run the command below in the lambda-go package folder
