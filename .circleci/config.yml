@@ -1,7 +1,7 @@
-# Golang CircleCI 2.0 configuration file
+# Golang CircleCI 2.1 configuration file
 #
-# Check https://circleci.com/docs/2.0/language-go/ for more details
-version: 2
+# Check https://circleci.com/docs/2.1/language-go/ for more details
+version: 2.1
 
 executors:
   goexecutor:
@@ -45,3 +45,11 @@ jobs:
       - goexecutor_setup
       - run: |
           SIGNALFX_AUTH_TOKEN=test go test -v
+
+workflows:
+  run_jobs:
+    jobs:
+      - lint
+      - vet
+      - fmt
+      - tests
