@@ -75,7 +75,7 @@ The Lambda wrapper adds the following dimensions to all data points sent to Sign
 
 
 ### Sending custom metric in the Lambda function
-Use the `SendDatapoint()` method of HandlerWrapper to send custom metrics/datapoints to SignalFx from within the 
+Use the `SendDatapoint()` method of `HandlerWrapper` to send custom metric datapoints to SignalFx from within your 
 Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be 
 accessible within your Lambda handler function. See example below.
 
