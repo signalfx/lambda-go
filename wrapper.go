@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	name = "signalfx_lambda_go"
+	name    = "signalfx_lambda_go"
 	version = "0.0.1"
 )
 
@@ -103,9 +103,9 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	}
 	arnSubstrings := strings.Split(lambdaContext.InvokedFunctionArn, ":")
 	dims := dimensions{
-		"aws_function_version": lambdacontext.FunctionVersion,
-		"aws_function_name":    lambdacontext.FunctionName,
-		"metric_source":        "lambda_wrapper",
+		"aws_function_version":     lambdacontext.FunctionVersion,
+		"aws_function_name":        lambdacontext.FunctionName,
+		"metric_source":            "lambda_wrapper",
 		"function_wrapper_version": name + "_" + version,
 	}
 	var errs []string
