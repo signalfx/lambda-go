@@ -23,7 +23,7 @@ type HandlerWrapper interface {
 type handlerWrapper struct {
 	lambda.Handler
 	notColdStart bool
-	ctx          *context.Context
+	ctx          context.Context
 }
 
 // NewHandlerWrapper is a HandlerWrapper creating factory function.
@@ -34,7 +34,7 @@ func NewHandlerWrapper(handler lambda.Handler) HandlerWrapper {
 // Invoke is handlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
 // Invoke creates and sends metrics.
 func (hw *handlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	hw.ctx = &ctx
+	hw.ctx = ctx
 	dps := []*datapoint.Datapoint{hw.invocationsDatapoint()}
 	if !hw.notColdStart {
 		dps = append(dps, hw.coldStartsDatapoint())
@@ -61,7 +61,7 @@ func Start(handler HandlerWrapper) {
 
 // SendDatapoints sends custom metric datapoints to SignalFx.
 func (hw *handlerWrapper) SendDatapoints(dps []*datapoint.Datapoint) error {
-	return hw.sendDatapoints(*hw.ctx, dps)
+	return hw.sendDatapoints(hw.ctx, dps)
 }
 
 func (hw *handlerWrapper) sendDatapoints(ctx context.Context, dps []*datapoint.Datapoint) error {
