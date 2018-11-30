@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	name = "signalfx_lambda_go"
+	version = "0.0.1"
+)
+
 // HandlerWrapper extends interface lambda.Handler to support sending metric datapoints.
 type HandlerWrapper interface {
 	Invoke(ctx context.Context, payload []byte) ([]byte, error)
@@ -101,7 +106,7 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 		"aws_function_version": lambdacontext.FunctionVersion,
 		"aws_function_name":    lambdacontext.FunctionName,
 		"metric_source":        "lambda_wrapper",
-		//'function_wrapper_version': name + '_' + version,
+		"function_wrapper_version": name + "_" + version,
 	}
 	var errs []string
 	if err := dims.addArnDerivedDimension("aws_region", arnSubstrings, 3); err != nil {
