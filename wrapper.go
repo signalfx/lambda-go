@@ -65,6 +65,8 @@ func (hw *HandlerWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.D
 	return err
 }
 
+// defaultDimensions derives metric dimensions from AWS Lambda ARN. Formats and examples of AWS Lambda ARNs are in the
+// AWS Lambda (Lambda) section at https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
 func defaultDimensions(ctx context.Context) (map[string]string, error) {
 	var lambdaContext *lambdacontext.LambdaContext
 	var ok bool
