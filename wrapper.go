@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/signalfx/golib/datapoint"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
 	"time"
@@ -20,26 +21,19 @@ type HandlerWrapper struct {
 // Invoke is HandlerWrapper's lambda.Handler implementation that delegates to the Invoke method of the embedded lambda.Handler.
 // Invoke creates and sends metrics.
 func (hw *HandlerWrapper) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("invalid argument. context is nil")
-	}
 	dps := []*datapoint.Datapoint{hw.invocationsDatapoint()}
+	if !hw.notColdStart {
+		dps = append(dps, hw.coldStartsDatapoint())
+		hw.notColdStart = true
+	}
 	start := time.Now()
 	responseBytes, err := hw.Handler.Invoke(ctx, payload)
 	dps = append(dps, hw.durationDatapoint(time.Since(start)))
 	if err != nil {
 		dps = append(dps, hw.errorsDatapoint())
 	}
-	if !hw.notColdStart {
-		dps = append(dps, hw.coldStartsDatapoint())
-		hw.notColdStart = true
-	}
 	if err2 := hw.SendDatapoints(ctx, dps); err2 != nil {
-		var errString string
-		if err != nil {
-			errString = err.Error()
-		}
-		err = fmt.Errorf(strings.Join([]string{errString, err2.Error()}, "\n"))
+		log.Error(err2)
 	}
 	return responseBytes, err
 }
@@ -58,6 +52,7 @@ func (hw *HandlerWrapper) SendDatapoints(ctx context.Context, dps []*datapoint.D
 		return fmt.Errorf("invalid argument. context is nil")
 	}
 	dims, err := defaultDimensions(ctx)
+	// Adding dimensions to datapoints with checking for errors. Valid dimensions (dims) and errors (err) possible.
 	for _, dp := range dps {
 		dp.Dimensions = datapoint.AddMaps(dims, dp.Dimensions)
 	}
@@ -108,7 +103,7 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 			}
 		}
 	} else {
-		errs = append(errs, fmt.Sprintf("Invalid arn. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", len(arnSubstrings), lambdaContext.InvokedFunctionArn))
+		errs = append(errs, fmt.Sprintf("invalid arn. got %d substrings instead of 7 or 8 after colon-splitting the arn %s", len(arnSubstrings), lambdaContext.InvokedFunctionArn))
 	}
 	if os.Getenv("AWS_EXECUTION_ENV") != "" {
 		dims["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
@@ -124,7 +119,7 @@ func (ds dimensions) addArnDerivedDimension(dimension string, arnSubstrings []st
 		ds[dimension] = arnSubstrings[arnSubstringIndex]
 		return nil
 	}
-	return fmt.Errorf("Invalid arn caused %s dimension value not to be set. Got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings, ":"))
+	return fmt.Errorf("invalid arn caused %s dimension value not to be set. got %d substrings instead of 7 or 8 after colon-splitting the arn %s", dimension, len(arnSubstrings), strings.Join(arnSubstrings, ":"))
 }
 
 func (hw *HandlerWrapper) invocationsDatapoint() *datapoint.Datapoint {
