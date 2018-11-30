@@ -20,10 +20,10 @@ values of the other variables accordingly if desired.
 `SIGNALFX_SEND_TIMEOUT_SECONDS=5`
 
 ###  Wrapping a function
-The SignalFx Go Lambda Wrapper wraps `lambda.Handler`. Use the `lambda.NewHandler` function to create the `lambda.Handler` 
-from your Lambda handler function then pass it to the `sfxlambda.NewHandlerWrapper` function to create the 
-`sfxlambda.HandlerWrapper`. Pass the `sfxlambda.HandlerWrapper` to the 
-`Start()` function. See the example below.
+The SignalFx Go Lambda Wrapper wraps the handler `lambda.Handler`. Use the `lambda.NewHandler()` function to create the 
+handler by passing your Lambda handler function to `lambda.NewHandler()`. Pass the created handler to the 
+`sfxlambda.NewHandlerWrapper` function to create the wrapper `sfxlambda.HandlerWrapper`. Finally, pass the created wrapper 
+to the `sfxlambda.Start()` function. See the example below.
 
 ```
 import (
@@ -75,9 +75,9 @@ The Lambda wrapper adds the following dimensions to all data points sent to Sign
 
 
 ### Sending custom metric in the Lambda function
-Use the `SendDatapoint()` method of `HandlerWrapper` to send custom metric datapoints to SignalFx from within your 
-Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be 
-accessible within your Lambda handler function. See example below.
+Use the method `sfxlambda.SendDatapoint()` of `HandlerWrapper` to send custom metric datapoints to SignalFx from within your 
+Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be accessible 
+from within your Lambda handler function. See example below.
 
 ```
 import (
