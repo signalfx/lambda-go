@@ -9,13 +9,21 @@ To install run the command:
 
 `$ go get https://github.com/signalfx/lambda-go`
 
+#### Configuring the ingest endpoint
+
+By default, this function wrapper will send to the `us0` realm. If you are
+not in this realm you will need to set the `SIGNALFX_INGEST_ENDPOINT` environment
+variable to the correct realm ingest endpoint (https://ingest.{REALM}.signalfx.com/v2/datapoint).
+To determine what realm you are in, check your profile page in the SignalFx
+web application (click the avatar in the upper right and click My Profile).
+
 ### Environment Variable
 Set the SIGNALFX_AUTH_TOKEN environment variable with the appropriate SignalFx authentication token. Change the default 
 values of the other variables accordingly if desired.
 
 `SIGNALFX_AUTH_TOKEN=<SignalFx authentication token>`
 
-`SIGNALFX_INGEST_ENDPOINT=https://ingest.signalfx.com/v2/datapoint`
+`SIGNALFX_INGEST_ENDPOINT=https://ingest.{REALM}.signalfx.com/v2/datapoint`
 
 `SIGNALFX_SEND_TIMEOUT_SECONDS=5`
 
