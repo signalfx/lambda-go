@@ -139,7 +139,7 @@ func defaultDimensions(ctx context.Context) (map[string]string, error) {
 		errs = append(errs, fmt.Sprintf("invalid arn. got %d substrings instead of 7 or 8 after colon-splitting the arn %s", len(arnSubstrings), lambdaContext.InvokedFunctionArn))
 	}
 	if os.Getenv("AWS_EXECUTION_ENV") != "" {
-		dims["ws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
+		dims["aws_execution_env"] = os.Getenv("AWS_EXECUTION_ENV")
 	}
 	if len(errs) == 0 {
 		return dims, nil

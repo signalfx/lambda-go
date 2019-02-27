@@ -2,20 +2,20 @@ package sfxclient
 
 import (
 	"bytes"
+	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
-
-	"compress/gzip"
-	"context"
-	"io"
-	"sync"
+	"unsafe"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mailru/easyjson"
@@ -23,9 +23,9 @@ import (
 	"github.com/signalfx/golib/datapoint"
 	"github.com/signalfx/golib/errors"
 	"github.com/signalfx/golib/event"
+	"github.com/signalfx/golib/sfxclient/spanfilter"
 	"github.com/signalfx/golib/trace"
 	"github.com/signalfx/golib/trace/format"
-	"unsafe"
 )
 
 const (
@@ -55,6 +55,8 @@ type HTTPSink struct {
 	EventEndpoint      string
 	DatapointEndpoint  string
 	TraceEndpoint      string
+	AdditionalHeaders  map[string]string
+	ResponseCallback   func(resp *http.Response, responseBody []byte)
 	Client             *http.Client
 	protoMarshaler     func(pb proto.Message) ([]byte, error)
 	jsonMarshal        func(v []*trace.Span) ([]byte, error)
@@ -89,13 +91,16 @@ func (h *HTTPSink) handleResponse(resp *http.Response, respValidator responseVal
 		return errors.Annotate(err, "cannot fully read response body")
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	// all 2XXs
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return SFXAPIError{
 			StatusCode:   resp.StatusCode,
 			ResponseBody: string(respBody),
 		}
 	}
-
+	if h.ResponseCallback != nil {
+		h.ResponseCallback(resp, respBody)
+	}
 	return respValidator(respBody)
 }
 
@@ -118,6 +123,10 @@ func (h *HTTPSink) doBottom(ctx context.Context, f func() (io.Reader, bool, erro
 		return errors.Annotatef(err, "cannot parse new HTTP request to %s", endpoint)
 	}
 	req = req.WithContext(ctx)
+	for k, v := range h.AdditionalHeaders {
+		req.Header.Set(k, v)
+	}
+	// set these below so if someone accidentally uses the same as below we wil override appropriately
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set(TokenHeaderName, h.AuthToken)
 	req.Header.Set("User-Agent", h.UserAgent)
@@ -137,7 +146,7 @@ func (h *HTTPSink) doBottom(ctx context.Context, f func() (io.Reader, bool, erro
 
 // AddDatapoints forwards the datapoints to SignalFx.
 func (h *HTTPSink) AddDatapoints(ctx context.Context, points []*datapoint.Datapoint) (err error) {
-	if len(points) == 0 {
+	if len(points) == 0 || h.DatapointEndpoint == "" {
 		return nil
 	}
 	return h.doBottom(ctx, func() (io.Reader, bool, error) {
@@ -268,16 +277,6 @@ func (h *HTTPSink) coreDatapointToProtobuf(point *datapoint.Datapoint) *com_sign
 		MetricType: &mt,
 		Dimensions: mapToDimensions(point.Dimensions),
 	}
-	for k, v := range point.GetProperties() {
-		kv := k
-		pv := rawToProtobuf(v)
-		if pv != nil && k != "" {
-			dp.Properties = append(dp.Properties, &com_signalfx_metrics_protobuf.Property{
-				Key:   &kv,
-				Value: pv,
-			})
-		}
-	}
 	return dp
 }
 
@@ -285,7 +284,7 @@ func (h *HTTPSink) coreDatapointToProtobuf(point *datapoint.Datapoint) *com_sign
 func (h *HTTPSink) getReader(b []byte) (io.Reader, bool, error) {
 	var err error
 	if !h.DisableCompression && len(b) > 1500 {
-		buf := new(bytes.Buffer)
+		buf := new(bytes.Buffer) // TODO use a pool for this too?
 		w := h.zippers.Get().(*gzip.Writer)
 		defer h.zippers.Put(w)
 		w.Reset(buf)
@@ -317,7 +316,7 @@ func (h *HTTPSink) encodePostBodyProtobufV2(datapoints []*datapoint.Datapoint) (
 
 // AddEvents forwards the events to SignalFx.
 func (h *HTTPSink) AddEvents(ctx context.Context, events []*event.Event) (err error) {
-	if len(events) == 0 {
+	if len(events) == 0 || h.EventEndpoint == "" {
 		return nil
 	}
 	return h.doBottom(ctx, func() (io.Reader, bool, error) {
@@ -375,24 +374,9 @@ func mapToProperties(properties map[string]interface{}) []*com_signalfx_metrics_
 	return response
 }
 
-type spanResponse struct {
-	Valid   uint64              `json:"valid"`
-	Invalid map[string][]string `json:"invalid"`
-}
-
 func spanResponseValidator(respBody []byte) error {
 	if string(respBody) != `"OK"` {
-		var respObj spanResponse
-
-		if err := json.Unmarshal(respBody, &respObj); err != nil {
-			return errors.Annotatef(err, "cannot unmarshal response body %s", respBody)
-		}
-
-		for _, v := range respObj.Invalid {
-			if len(v) > 0 {
-				return errors.Errorf("some spans were invalid: %v", respObj.Invalid)
-			}
-		}
+		return spanfilter.ReturnInvalidOrError(respBody)
 	}
 
 	return nil
@@ -400,7 +384,7 @@ func spanResponseValidator(respBody []byte) error {
 
 // AddSpans forwards the traces to SignalFx.
 func (h *HTTPSink) AddSpans(ctx context.Context, traces []*trace.Span) (err error) {
-	if len(traces) == 0 {
+	if len(traces) == 0 || h.TraceEndpoint == "" {
 		return nil
 	}
 	return h.doBottom(ctx, func() (io.Reader, bool, error) {
