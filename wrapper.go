@@ -3,13 +3,14 @@ package sfxlambda
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/signalfx/golib/datapoint"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
@@ -166,7 +167,7 @@ func (hw *handlerWrapper) coldStartsDatapoint() *datapoint.Datapoint {
 }
 
 func (hw *handlerWrapper) durationDatapoint(elapsed time.Duration) *datapoint.Datapoint {
-	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewFloatValue(elapsed.Seconds()), MetricType: datapoint.Gauge}
+	dp := datapoint.Datapoint{Metric: "function.duration", Value: datapoint.NewIntValue(Milliseconds(elapsed)), MetricType: datapoint.Gauge}
 	return &dp
 }
 
@@ -174,3 +175,7 @@ func (hw *handlerWrapper) errorsDatapoint() *datapoint.Datapoint {
 	dp := datapoint.Datapoint{Metric: "function.errors", Value: datapoint.NewIntValue(1), MetricType: datapoint.Counter}
 	return &dp
 }
+
+// Milliseconds returns the duration as an integer millisecond count.
+// Added to time.Duration in go 1.13
+func Milliseconds(d time.Duration) int64 { return int64(d) / 1e6 }
