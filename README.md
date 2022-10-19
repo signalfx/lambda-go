@@ -1,7 +1,7 @@
 >ℹ️&nbsp;&nbsp;SignalFx was acquired by Splunk in October 2019. See [Splunk SignalFx](https://www.splunk.com/en_us/investor-relations/acquisitions/signalfx.html) for more information.
 
 > # :warning: Deprecation Notice
-> The SignalFx Go Lambda Wrapper is deprecated. Only critical security fixes and bug fixes are provided.
+> The SignalFx Go Lambda Wrapper is deprecated and will reach End of Support on September 30, 2023. After that date, this repository will be archived and no longer receive updates. Until then, only critical security fixes and bug fixes will be provided.
 >
 > Going forward, Lambda functions should use the Splunk OpenTelemetry Lambda Layer, which offers similar capabilities and fully supports the OpenTelemetry standard. To learn more about the Splunk OTel Lambda Layer, see https://docs.splunk.com/Observability/gdi/get-data-in/serverless/aws/otel-lambda-layer/instrument-lambda-functions.html#nav-Instrument-your-Lambda-function
 
@@ -27,7 +27,7 @@ To determine what realm you are in, check your profile page in the SignalFx
 web application (click the avatar in the upper right and click My Profile).
 
 ### Environment Variable
-Set the SIGNALFX_AUTH_TOKEN environment variable with the appropriate SignalFx authentication token. Change the default 
+Set the SIGNALFX_AUTH_TOKEN environment variable with the appropriate SignalFx authentication token. Change the default
 values of the other variables accordingly if desired.
 
 `SIGNALFX_AUTH_TOKEN=<SignalFx authentication token>`
@@ -37,9 +37,9 @@ values of the other variables accordingly if desired.
 `SIGNALFX_SEND_TIMEOUT_SECONDS=5`
 
 ###  Wrapping a function
-The SignalFx Go Lambda Wrapper wraps the handler `lambda.Handler`. Use the `lambda.NewHandler()` function to create the 
-handler by passing your Lambda handler function to `lambda.NewHandler()`. Pass the created handler to the 
-`sfxlambda.NewHandlerWrapper` function to create the wrapper `sfxlambda.HandlerWrapper`. Finally, pass the created wrapper 
+The SignalFx Go Lambda Wrapper wraps the handler `lambda.Handler`. Use the `lambda.NewHandler()` function to create the
+handler by passing your Lambda handler function to `lambda.NewHandler()`. Pass the created handler to the
+`sfxlambda.NewHandlerWrapper` function to create the wrapper `sfxlambda.HandlerWrapper`. Finally, pass the created wrapper
 to the `sfxlambda.Start()` function. See the example below.
 
 ```
@@ -92,8 +92,8 @@ The Lambda wrapper adds the following dimensions to all data points sent to Sign
 
 
 ### Sending custom metric in the Lambda function
-Use the method `sfxlambda.SendDatapoint()` of `HandlerWrapper` to send custom metric datapoints to SignalFx from within your 
-Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be accessible 
+Use the method `sfxlambda.SendDatapoint()` of `HandlerWrapper` to send custom metric datapoints to SignalFx from within your
+Lambda handler function. A `sfxlambda.HandlerWrapper` variable needs to be declared globally in order to be accessible
 from within your Lambda handler function. See example below.
 
 ```
